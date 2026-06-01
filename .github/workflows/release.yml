@@ -1,0 +1,52 @@
+name: Release
+
+# Build, attest, and publish a GitHub release whenever a version tag is pushed.
+# Tags follow Obsidian's convention: the exact manifest version, no "v" prefix
+# (e.g. 0.1.2). The built assets are attested with build provenance so users
+# can cryptographically verify they came from this repository.
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write # create the release
+  id-token: write # required by attest-build-provenance
+  attestations: write # write the provenance attestation
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" main.js manifest.json styles.css \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$TAG" \
+            --notes "Release $TAG"
