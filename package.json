@@ -1,7 +1,7 @@
 {
   "name": "obsidian-lore-graph",
   "version": "0.1.0",
-  "description": "Cache des dossiers entiers du graph view Obsidian et affiche leur contenu à la demande au clic sur un node (cascade reveal).",
+  "description": "Hide whole folders from the graph view and reveal their notes on demand by clicking a related node.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -24,7 +24,6 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^16.11.6",
-    "builtin-modules": "3.3.0",
     "esbuild": "0.17.3",
     "obsidian": "latest",
     "pixi.js": "^7.4.0",
