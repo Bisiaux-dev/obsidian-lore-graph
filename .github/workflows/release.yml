@@ -50,3 +50,17 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "$TAG" \
             --notes "Release $TAG"
+
+      # Notifie le vault template pour un resync instantané du plugin embarqué.
+      # Le PAT (fine-grained, scope Contents:write sur lore-obsidian_priv) est
+      # requis car le GITHUB_TOKEN par défaut ne peut pas écrire hors de ce repo.
+      - name: Notifier le template (sync instantané)
+        if: success() && env.DISPATCH_TOKEN != ''
+        env:
+          DISPATCH_TOKEN: ${{ secrets.LORE_OBSIDIAN_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.LORE_OBSIDIAN_DISPATCH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          echo "{\"event_type\":\"lore-graph-release\",\"client_payload\":{\"version\":\"$TAG\"}}" \
+            | gh api --method POST repos/Bisiaux-dev/lore-obsidian_priv/dispatches --input -
+          echo "::notice::repository_dispatch lore-graph-release envoyé ($TAG)."
