@@ -1,0 +1,18 @@
+node_modules/
+main.js
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+.env
+data.json
+.vscode/
+.idea/
+
+# Test artifacts
+_test/*.png
+_test/*.json
+_test/node_modules/
+
+# Local Obsidian state (le projet n'est pas un vault, .obsidian créé par accident)
+.obsidian/

@@ -1,0 +1,35 @@
+{
+  "name": "obsidian-lore-graph",
+  "version": "0.1.0",
+  "description": "Cache des dossiers entiers du graph view Obsidian et affiche leur contenu à la demande au clic sur un node (cascade reveal).",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "lint": "tsc -noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy:test": "npm run build && node _test/deploy.cjs",
+    "test:e2e": "node _test/e2e.cjs",
+    "test:e2e:regression": "node _test/regression.cjs"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "graph-view",
+    "second-brain",
+    "lore"
+  ],
+  "author": "Pierre Bisiaux",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "builtin-modules": "3.3.0",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "pixi.js": "^7.4.0",
+    "tslib": "2.4.0",
+    "typescript": "4.7.4",
+    "vitest": "^2.1.9"
+  }
+}
