@@ -2,7 +2,25 @@
 
 Hide whole folders from Obsidian's graph view and reveal their notes **on demand**, by clicking a related node. Ideal for "second brain" vaults that accumulate many daily notes (`journal/`, `inbox/`, `archive/`) — the graph stays readable while keeping contextual backlinks one click away.
 
+![Lore Graph demo](https://raw.githubusercontent.com/Bisiaux-dev/obsidian-lore-graph/main/assets/demo.gif)
+
 > **Status:** early development (v0.1.0). The plugin hooks **undocumented internal APIs** of Obsidian's graph renderer, so it may break between Obsidian versions. All such access is isolated in a single adapter (`src/rendererAdapter.ts`) to make those breakages easy to fix.
+
+## Why
+
+A real "second brain" graph drowns in daily notes and topic notes — every node is connected to everything, and the view becomes noise:
+
+![Without Lore Graph](https://raw.githubusercontent.com/Bisiaux-dev/obsidian-lore-graph/main/assets/without-plugin.png)
+
+Lore Graph hides the noisy folders, leaving only your evergreen people/projects/MOCs — a graph you can actually read:
+
+![With Lore Graph](https://raw.githubusercontent.com/Bisiaux-dev/obsidian-lore-graph/main/assets/clean.png)
+
+## Reveal on demand
+
+Hover or click a node and its hidden journal entries and topics fan out around it, highlighted — while the rest of the graph dims. Click again to open the note; click empty space to reset.
+
+![Reveal in action](https://raw.githubusercontent.com/Bisiaux-dev/obsidian-lore-graph/main/assets/reveal.png)
 
 ## Behavior
 
@@ -14,6 +32,8 @@ Hide whole folders from Obsidian's graph view and reveal their notes **on demand
 - **Click empty space** → resets the reveal session.
 
 ## Settings
+
+![Settings](https://raw.githubusercontent.com/Bisiaux-dev/obsidian-lore-graph/main/assets/settings.png)
 
 - **Enable feature** — global toggle.
 - **Hidden folders** — list of folder paths to hide (default: `journal/`).
