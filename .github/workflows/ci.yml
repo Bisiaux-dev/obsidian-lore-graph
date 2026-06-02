@@ -1,0 +1,40 @@
+name: CI
+
+# Typecheck + build + tests + audit des dépendances runtime, à chaque push
+# et pull request sur main. Garde-fou avant toute release.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (typecheck + bundle)
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+      # Audit ciblé sur les dépendances RUNTIME (ce qui est réellement livré
+      # aux utilisateurs). Échoue si une vuln high/critical les touche.
+      - name: Audit runtime dependencies
+        run: npm audit --omit=dev --audit-level=high
