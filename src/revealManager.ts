@@ -32,10 +32,17 @@ export interface IRevealManager {
  *   - Initial state: all hidden nodes → alpha=0, eventMode=none
  *   - Hover on node A → its linked hidden nodes go to alpha=1 (preview)
  *   - HoverEnd → back to alpha=0 (unless pinned)
- *   - Click on node A → pin the reveal; it stays shown
- *   - Click on a revealed hidden node → cascade: new pin, new links
+ *   - Click on node A → pin it; reveal its hidden links
+ *   - Click a linked node (hidden candidate or visible neighbour) → cascade:
+ *     it becomes the new pin and extends `pathNodes` (the clicked chain)
+ *   - Re-click a node already on the path → walk back up (truncate the chain)
  *   - Click the pinned node a 2nd time → open the note
- *   - visitedNodes accumulates to exclude repeats across cascades
+ *
+ * `pathNodes` is the breadcrumb of clicked nodes. With the `keepTrail` setting
+ * on, the whole path stays revealed and is tinted blue (current pin excepted —
+ * it keeps the native purple highlight); with it off, only the current node and
+ * its children are shown. `currentlyRevealed` is derived each reveal as
+ * {hidden path nodes} ∪ {current node's candidates}.
  */
 export class RevealManager implements IRevealManager {
   private plugin: LoreGraphPlugin;
@@ -43,8 +50,11 @@ export class RevealManager implements IRevealManager {
 
   private pinnedNode: string | null = null;
   private hoveredNode: string | null = null;
-  private visitedNodes = new Set<string>();
   private currentlyRevealed = new Set<string>();
+  // Ordered chain of clicked nodes (the breadcrumb). When keepTrail is on, the
+  // hidden nodes of this path stay revealed and tinted blue as you cascade
+  // deeper, while siblings of each step fade out.
+  private pathNodes: string[] = [];
   // Grace period before hiding revealed nodes after a mouseout (lets the user
   // move the mouse from the main node to a revealed one without losing it).
   private hoverEndTimer: number | null = null;
@@ -79,24 +89,55 @@ export class RevealManager implements IRevealManager {
     // RendererPatcher) returns our pinned node when set, so the native render
     // applies automatically, identical to hover.
     //
-    // CRITICAL: only TOUCH hidden-folder nodes. Touching "normal" nodes would
-    // cancel Obsidian's native dim/highlight (renderer.highlightNode + native
-    // hover).
+    // CRITICAL: only touch the alpha/visibility of hidden-folder nodes.
+    // Touching "normal" nodes' alpha would cancel Obsidian's native dim/highlight
+    // (renderer.highlightNode + native hover). The one thing we DO override on
+    // normal nodes is `tint` (breadcrumb coloring) — that doesn't affect the
+    // dim/highlight, which are driven by alpha.
     let anyFading = false;
+    // Index of each path node (built once per frame): membership for node
+    // tinting + adjacency for path-edge tinting. Null when keepTrail is off.
+    const tintPath = enabled && this.plugin.settings.keepTrail;
+    const pathIdx = tintPath
+      ? new Map(this.pathNodes.map((p, i) => [p, i] as const))
+      : null;
+    // A breadcrumb node tinted blue = on the path, not the current pin (which
+    // keeps Obsidian's native purple highlight).
+    const onTrail = (id: string) =>
+      pathIdx !== null && id !== this.pinnedNode && pathIdx.has(id);
     for (const node of nodes) {
-      if (!this.isInHiddenFolder(node.id)) continue;
-      const shouldShow = !enabled ? true : this.currentlyRevealed.has(node.id);
-      if (this.setNodeVisible(node, shouldShow, dt)) anyFading = true;
+      if (this.isInHiddenFolder(node.id)) {
+        const shouldShow = !enabled ? true : this.currentlyRevealed.has(node.id);
+        if (this.setNodeVisible(node, shouldShow, dt)) anyFading = true;
+        const tint = onTrail(node.id) && shouldShow ? RevealManager.PATH_TINT : null;
+        if (this.applyTint(node, tint)) anyFading = true;
+      } else {
+        // Always-visible (evergreen) node: never touch its alpha/visibility
+        // (that would cancel Obsidian's native dim/highlight) — only tint it
+        // blue when it's part of the breadcrumb.
+        const tint = onTrail(node.id) ? RevealManager.PATH_TINT : null;
+        if (this.applyTint(node, tint)) anyFading = true;
+      }
     }
-    // For links: only touch those with at least one endpoint in a hidden
-    // folder.
+    // Links: manage visibility for those touching a hidden node; tint the path
+    // edges (between consecutive breadcrumb nodes) blue — including edges
+    // between two always-visible nodes.
     for (const link of this.adapter.getLinks()) {
       const src = this.endpointId(link.source);
       const tgt = this.endpointId(link.target);
-      if (!this.isInHiddenFolder(src) && !this.isInHiddenFolder(tgt)) continue;
-      if (this.setLinkVisible(link, this.isLinkVisible(link, enabled), dt)) {
-        anyFading = true;
+      if (this.isInHiddenFolder(src) || this.isInHiddenFolder(tgt)) {
+        if (this.setLinkVisible(link, this.isLinkVisible(link, enabled), dt)) {
+          anyFading = true;
+        }
       }
+      const onPath =
+        pathIdx !== null &&
+        pathIdx.has(src) &&
+        pathIdx.has(tgt) &&
+        Math.abs((pathIdx.get(src) as number) - (pathIdx.get(tgt) as number)) === 1;
+      const tint = onPath ? RevealManager.PATH_TINT : null;
+      if (this.applyTintObj(link.line, tint)) anyFading = true;
+      if (this.applyTintObj(link.arrow, tint)) anyFading = true;
     }
     // Obsidian's PIXI ticker is `started: false`. During a fade, without
     // calling `forceRender()`, the canvas stays frozen on the first alpha tick
@@ -157,7 +198,7 @@ export class RevealManager implements IRevealManager {
     }
     this.pinnedNode = null;
     this.hoveredNode = null;
-    this.visitedNodes.clear();
+    this.pathNodes = [];
     // Force-clear the native hover state. The original getter (Obsidian)
     // hit-tests on mouseX/Y → as long as those coords point at a node, it
     // returns that node even after our clear. So we move the hit off any node
@@ -180,6 +221,11 @@ export class RevealManager implements IRevealManager {
     for (const node of this.adapter.getNodes()) {
       this.myAlpha.delete(node.circle);
       this.myAlpha.delete(node.text);
+      // Restore any breadcrumb tint we applied.
+      if (node.circle && this.myTint.has(node.circle)) {
+        (node.circle as any).tint = this.myTint.get(node.circle) as number;
+        this.myTint.delete(node.circle);
+      }
       if (node.circle) {
         node.circle.alpha = 1;
         node.circle.visible = true;
@@ -204,11 +250,16 @@ export class RevealManager implements IRevealManager {
       for (const obj of [link.line, link.px, link.arrow]) {
         if (!obj) continue;
         this.myAlpha.delete(obj);
+        if (this.myTint.has(obj)) {
+          (obj as any).tint = this.myTint.get(obj) as number;
+          this.myTint.delete(obj);
+        }
         obj.alpha = 1;
         obj.visible = true;
       }
     }
     this.currentlyRevealed.clear();
+    this.pathNodes = [];
     this.adapter.flagChanged();
   }
 
@@ -219,20 +270,26 @@ export class RevealManager implements IRevealManager {
       return;
     }
 
-    const wasHovered = this.hoveredNode === id;
-    // Forward cascade: we extend the current chain. That means either:
-    //   - the clicked node was hovered (first click of the chain, after the
-    //     hover preview), or
-    //   - it is currently revealed as a child of the previous pin (natural
-    //     extension of the cascade).
-    // Any other case (clicking a node already visited but OUTSIDE the current
-    // fan-out = back-nav to an older root, or clicking a brand-new node with no
-    // visible link) → reset the history to start fresh.
-    const isForwardCascade = wasHovered || this.currentlyRevealed.has(id);
-    if (!isForwardCascade) {
-      this.visitedNodes.clear();
+    // Maintain the breadcrumb path of clicked nodes.
+    const inPath = this.pathNodes.indexOf(id);
+    // Extend the path when clicking a node LINKED to the current one — a hidden
+    // candidate OR an always-visible (evergreen) neighbour. The breadcrumb can
+    // thus weave through both hidden and visible nodes.
+    const extendsPath =
+      inPath === -1 &&
+      this.pinnedNode !== null &&
+      this.areLinked(this.pinnedNode, id);
+    if (inPath !== -1) {
+      // Re-click a node already on the path → walk back up to it.
+      this.pathNodes = this.pathNodes.slice(0, inPath + 1);
+    } else if (extendsPath) {
+      // Forward cascade: extend the path with the clicked neighbour.
+      this.pathNodes.push(id);
+    } else {
+      // New root: first click, or a node unrelated to the current fan-out.
+      this.pathNodes = [id];
     }
-    this.visitedNodes.add(id);
+
     this.pinnedNode = id;
     this.hoveredNode = null;
 
@@ -240,60 +297,63 @@ export class RevealManager implements IRevealManager {
     // RendererPatcher) will be consulted by the render loop and return our
     // pinned node → purple effect.
     this.adapter.flagChanged();
-
-    if (wasHovered && this.currentlyRevealed.size > 0) {
-      for (const revealedId of this.currentlyRevealed) {
-        this.visitedNodes.add(revealedId);
-      }
-      return;
-    }
-
     this.applyReveal(true);
   }
 
-  private applyReveal(useVisited: boolean): void {
+  private applyReveal(excludePath: boolean): void {
     const target = this.pinnedNode ?? this.hoveredNode;
-    this.hideAllRevealed();
     if (!target || !this.plugin.settings.enabled) {
+      this.hideAllRevealed();
       this.adapter.flagChanged();
       return;
     }
 
-    // If the target is itself a hidden node (cascade case: clicking a revealed
-    // journal note), keep it visible during the cascade.
-    if (this.isInHiddenFolder(target)) {
-      const targetNode = this.adapter.getNode(target);
-      if (targetNode) {
-        this.setNodeVisible(targetNode, true);
-        this.currentlyRevealed.add(target);
-      }
-    }
+    const keepTrail = this.plugin.settings.keepTrail && this.pinnedNode !== null;
 
+    // Trail = the hidden nodes to keep visible besides the fresh candidates.
+    //   - keepTrail ON  → every hidden node of the clicked path (the breadcrumb)
+    //   - keepTrail OFF → just the current node if it's hidden (base behavior:
+    //     a cascaded-into hidden note stays while its children are revealed)
+    const trail = keepTrail
+      ? this.pathNodes.filter((p) => this.isInHiddenFolder(p))
+      : this.isInHiddenFolder(target)
+        ? [target]
+        : [];
+
+    // Candidates = the current node's hidden links, minus the path ancestors
+    // (don't re-offer where we came from), capped.
+    const onPath = new Set(this.pathNodes);
     const hiddenLinks = this.getHiddenLinks(target);
-    const filtered = useVisited
-      ? hiddenLinks.filter((l) => !this.visitedNodes.has(l))
+    const filtered = excludePath
+      ? hiddenLinks.filter((l) => !onPath.has(l))
       : hiddenLinks;
-    const cap = this.plugin.settings.maxNodes;
-    const shown = filtered.slice(0, cap);
+    const candidates = filtered.slice(0, this.plugin.settings.maxNodes);
 
-    for (const linkId of shown) {
-      const node = this.adapter.getNode(linkId);
-      if (node) {
-        this.setNodeVisible(node, true);
-        this.currentlyRevealed.add(linkId);
-        if (useVisited) this.visitedNodes.add(linkId);
+    const desired = new Set<string>([...trail, ...candidates]);
+
+    // Diff against what's currently shown: fade out what leaves (faded
+    // siblings), reveal what enters.
+    for (const id of this.currentlyRevealed) {
+      if (!desired.has(id)) {
+        const node = this.adapter.getNode(id);
+        if (node) this.setNodeVisible(node, false);
       }
     }
-    // Show the edges between target and revealed nodes (and between mutually
-    // revealed nodes).
+    for (const id of desired) {
+      const node = this.adapter.getNode(id);
+      if (node) this.setNodeVisible(node, true);
+    }
+    this.currentlyRevealed = desired;
+
+    // Recompute link visibility: path + current→candidate edges become visible,
+    // edges to faded siblings hide. isLinkVisible already encodes "a hidden
+    // endpoint must be currently revealed".
+    const enabled = this.plugin.settings.enabled;
     for (const link of this.adapter.getLinks()) {
       const src = this.endpointId(link.source);
       const tgt = this.endpointId(link.target);
-      const involvesRevealed =
-        (src === target && this.currentlyRevealed.has(tgt)) ||
-        (tgt === target && this.currentlyRevealed.has(src)) ||
-        (this.currentlyRevealed.has(src) && this.currentlyRevealed.has(tgt));
-      if (involvesRevealed) this.setLinkVisible(link, true);
+      if (!this.isInHiddenFolder(src) && !this.isInHiddenFolder(tgt)) continue;
+      this.setLinkVisible(link, this.isLinkVisible(link, enabled));
     }
     this.adapter.flagChanged();
   }
@@ -348,10 +408,43 @@ export class RevealManager implements IRevealManager {
    */
   private static readonly HIDE_THRESHOLD = 0.005;
 
+  /**
+   * Tint applied to the already-traversed breadcrumb nodes. A blue in the same
+   * tone as Obsidian's native reveal highlight (#8a5cf5, hue 258°): same
+   * saturation/lightness, hue shifted to ~220° → #5c8ff5.
+   */
+  private static readonly PATH_TINT = 0x5c8ff5;
+
   private lastFrameTime = 0;
 
   // Our own alpha state, ignoring the renderer's per-frame reset.
   private myAlpha = new WeakMap<any, number>();
+  // Saved native tint of circles we override (to restore when they leave the path).
+  private myTint = new WeakMap<any, number>();
+
+  /**
+   * Override a node's tint (breadcrumb coloring), or restore its native tint
+   * when `tint` is null. The native renderer rewrites `tint` every frame, so we
+   * re-assert ours from the ticker — same approach as the alpha override.
+   * Returns true if something changed this frame.
+   */
+  private applyTintObj(obj: any, tint: number | null): boolean {
+    if (!obj || typeof obj.tint !== "number") return false;
+    if (tint === null) {
+      if (!this.myTint.has(obj)) return false;
+      obj.tint = this.myTint.get(obj) as number;
+      this.myTint.delete(obj);
+      return true;
+    }
+    if (!this.myTint.has(obj)) this.myTint.set(obj, obj.tint);
+    if (obj.tint === tint) return false;
+    obj.tint = tint;
+    return true;
+  }
+
+  private applyTint(node: GraphNode, tint: number | null): boolean {
+    return this.applyTintObj(node.circle, tint);
+  }
 
   /**
    * Time-based exponential lerp. The factor depends on the measured `dt` → the
@@ -383,6 +476,15 @@ export class RevealManager implements IRevealManager {
       next = this.lerpAlpha(current, desired, dt);
       this.myAlpha.set(target, next);
       target.alpha = next;
+      changed = true;
+    } else if (desired === 1 && target.alpha !== 1) {
+      // Stable AND meant to be fully visible, but the native renderer dimmed us:
+      // Obsidian's focus highlight (active while a node is pinned) fades every
+      // node that isn't a direct neighbour of the pinned node down to ~0.2.
+      // Without this, kept "trail" nodes (not adjacent to the current pin) would
+      // be faded out by the native highlight even though we keep them revealed.
+      // Re-assert our own alpha so the revealed subgraph stays visible.
+      target.alpha = 1;
       changed = true;
     }
     // visible/renderable/eventMode are ALWAYS resynced to the current state,
@@ -450,6 +552,16 @@ export class RevealManager implements IRevealManager {
     if (typeof endpoint === "string") return endpoint;
     if (endpoint && typeof endpoint === "object" && endpoint.id) return endpoint.id;
     return "";
+  }
+
+  /** True if there is a graph edge directly connecting `a` and `b`. */
+  private areLinked(a: string, b: string): boolean {
+    for (const link of this.adapter.getLinks()) {
+      const s = this.endpointId(link.source);
+      const t = this.endpointId(link.target);
+      if ((s === a && t === b) || (s === b && t === a)) return true;
+    }
+    return false;
   }
 
   // === Data: collect a node's hidden links ===

@@ -111,3 +111,32 @@ describe("lerpAlpha (time-based exponential fade)", () => {
     expect(next).toBeGreaterThan(0);
   });
 });
+
+describe("applyAlpha — resists native dimming of kept nodes", () => {
+  it("re-asserts alpha to 1 when a stable-visible node was dimmed by the native highlight", () => {
+    const mgr = makeManager([]);
+    const target: any = { alpha: 0.2 }; // native focus-highlight dimmed it
+    mgr.myAlpha.set(target, 1); // our state: fully visible and stable
+    const changed = mgr.applyAlpha(target, true, false, false, 16.67);
+    expect(target.alpha).toBe(1);
+    expect(changed).toBe(true);
+  });
+
+  it("leaves a stable-visible node already at full alpha untouched", () => {
+    const mgr = makeManager([]);
+    // visible/renderable already in sync so only the alpha branch could flip `changed`.
+    const target: any = { alpha: 1, visible: true, renderable: true };
+    mgr.myAlpha.set(target, 1);
+    const changed = mgr.applyAlpha(target, true, false, false, 16.67);
+    expect(target.alpha).toBe(1);
+    expect(changed).toBe(false);
+  });
+
+  it("does NOT force alpha on a stable-hidden node (desired 0)", () => {
+    const mgr = makeManager([]);
+    const target: any = { alpha: 0.2 };
+    mgr.myAlpha.set(target, 0);
+    mgr.applyAlpha(target, false, false, false, 16.67);
+    expect(target.alpha).toBe(0.2); // untouched
+  });
+});

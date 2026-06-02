@@ -18,6 +18,8 @@ interface Strings {
   hiddenFoldersDesc: string;
   maxNodesName: string;
   maxNodesDesc: string;
+  keepTrailName: string;
+  keepTrailDesc: string;
   addFolderButton: string;
   removeFolderTooltip: string;
   newFolderPlaceholder: string;
@@ -35,6 +37,9 @@ const catalog: Record<Lang, Strings> = {
     maxNodesName: "Max nodes shown",
     maxNodesDesc:
       "Hard cap on the number of nodes revealed per click. If a node has more hidden links than this limit, the extras are not shown (priority follows the metadataCache order).",
+    keepTrailName: "Keep reveal trail",
+    keepTrailDesc:
+      "During a deep search (cascade), keep the clicked path on screen as a breadcrumb — the traversed nodes stay visible and tinted blue, while the unclicked siblings of each step fade out.",
     addFolderButton: "+ Add folder",
     removeFolderTooltip: "Remove this folder",
     newFolderPlaceholder: "new-folder/",
@@ -51,6 +56,9 @@ const catalog: Record<Lang, Strings> = {
     maxNodesName: "Nombre max de nodes affichés",
     maxNodesDesc:
       "Cap dur sur le nombre de nodes révélés par clic. Si un node a plus de liens cachés que cette limite, les liens supplémentaires ne sont pas affichés (priorité à l'ordre des liens dans le metadataCache).",
+    keepTrailName: "Conserver le chemin révélé",
+    keepTrailDesc:
+      "Pendant une recherche en profondeur (cascade), garde le chemin cliqué à l'écran comme un fil d'Ariane — les nodes parcourus restent visibles et teintés en bleu, tandis que les frères non cliqués de chaque étape s'estompent.",
     addFolderButton: "+ Ajouter un dossier",
     removeFolderTooltip: "Retirer ce dossier",
     newFolderPlaceholder: "nouveau-dossier/",

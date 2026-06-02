@@ -28,10 +28,29 @@ describe("coerceSettings", () => {
       enabled: false,
       hiddenFolders: ["a/", "b/"],
       maxNodes: 10,
+      keepTrail: true,
     };
     const { settings, migrated } = coerceSettings(raw);
     expect(settings).toEqual(raw);
     expect(migrated).toBe(false);
+  });
+
+  it("keepTrail: defaults to false when absent", () => {
+    expect(coerceSettings({ version: cur }).settings.keepTrail).toBe(
+      DEFAULT_SETTINGS.keepTrail,
+    );
+  });
+
+  it("keepTrail: honored when a boolean", () => {
+    expect(coerceSettings({ version: cur, keepTrail: true }).settings.keepTrail).toBe(
+      true,
+    );
+  });
+
+  it("keepTrail: non-boolean → default", () => {
+    expect(coerceSettings({ version: cur, keepTrail: "yes" }).settings.keepTrail).toBe(
+      DEFAULT_SETTINGS.keepTrail,
+    );
   });
 
   it("stale version → migrated=true and unknown keys dropped", () => {

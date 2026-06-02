@@ -19,6 +19,13 @@ export interface LoreGraphSettings {
   enabled: boolean;
   hiddenFolders: string[];
   maxNodes: number;
+  /**
+   * When true, a cascade reveal (deep search) keeps the previously revealed
+   * nodes on screen instead of replacing them — so the path from the initial
+   * node stays visible. When false (default), each cascade step replaces the
+   * previous reveal.
+   */
+  keepTrail: boolean;
 }
 
 export const DEFAULT_SETTINGS: LoreGraphSettings = {
@@ -26,6 +33,7 @@ export const DEFAULT_SETTINGS: LoreGraphSettings = {
   enabled: true,
   hiddenFolders: ["journal/"],
   maxNodes: 20,
+  keepTrail: false,
 };
 
 /** Bounds of the `maxNodes` slider (see settings tab). */
@@ -64,11 +72,17 @@ export function coerceSettings(raw: unknown): {
     );
   }
 
+  const keepTrail =
+    typeof obj?.keepTrail === "boolean"
+      ? obj.keepTrail
+      : DEFAULT_SETTINGS.keepTrail;
+
   const settings: LoreGraphSettings = {
     version: SETTINGS_VERSION,
     enabled,
     hiddenFolders,
     maxNodes,
+    keepTrail,
   };
   const migrated = !obj || obj.version !== SETTINGS_VERSION;
   return { settings, migrated };
@@ -117,6 +131,16 @@ export class LoreGraphSettingTab extends PluginSettingTab {
             this.plugin.settings.maxNodes = v;
             await this.plugin.saveSettings();
           }),
+      );
+
+    new Setting(containerEl)
+      .setName(t.keepTrailName)
+      .setDesc(t.keepTrailDesc)
+      .addToggle((toggle) =>
+        toggle.setValue(this.plugin.settings.keepTrail).onChange(async (v) => {
+          this.plugin.settings.keepTrail = v;
+          await this.plugin.saveSettings();
+        }),
       );
   }
 
