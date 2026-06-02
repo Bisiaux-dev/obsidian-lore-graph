@@ -29,11 +29,11 @@
     "pixi.js": "^7.4.3"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "esbuild": "^0.25.0",
+    "@types/node": "^25.9.1",
+    "esbuild": "^0.28.0",
     "obsidian": "latest",
     "tslib": "^2.8.1",
-    "typescript": "^5.7.0",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   }
 }
