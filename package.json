@@ -1,6 +1,6 @@
 {
   "name": "obsidian-lore-graph",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Hide whole folders from the graph view and reveal their notes on demand by clicking a related node.",
   "main": "main.js",
   "scripts": {
@@ -22,13 +22,18 @@
   ],
   "author": "Pierre Bisiaux",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "pixi.js": "^7.4.3"
+  },
   "devDependencies": {
-    "@types/node": "^16.11.6",
-    "esbuild": "0.17.3",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
     "obsidian": "latest",
-    "pixi.js": "^7.4.0",
-    "tslib": "2.4.0",
-    "typescript": "4.7.4",
-    "vitest": "^2.1.9"
+    "tslib": "^2.8.1",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.8"
   }
 }
